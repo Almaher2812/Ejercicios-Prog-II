@@ -29,7 +29,12 @@ class ApiGateway1 {
     private final int maxPorMin = 3; // Máx 3 requests por minuto
 
     ApiGateway1(LoginService1 l){
-        this.login = l;
+        this.login = l;amdksanfknsakfsa
+        argsdas
+        deslizanted
+        staticdsa
+        deslizantedsa
+        deslizante
         // Estado inicial de inventario
         inventario.put("Avatar 2 20:00", 2);
         inventario.put("Dune 2 18:00", 1);
