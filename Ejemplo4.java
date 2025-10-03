@@ -1,5 +1,5 @@
-import java.util.*;
 import java.time.*;
+import java.util.*;
 
 /**
  * BANCO: 2FA simulado (OTP) + auditoría de transferencias.
@@ -43,7 +43,7 @@ class ApiGateway4 {
     }
 }
 
-public class Ejemplo4Banco {
+public class Ejemplo4 {
     public static void main(String[] args){
         LoginService4 ls = new LoginService4();
         ApiGateway4 gw = new ApiGateway4(ls);
@@ -59,12 +59,37 @@ public class Ejemplo4Banco {
             return "💸 Transferencia OK a: " + data;
         });
 
-        // Flujo de prueba
+        // Flujo de prueba: 10 transferencias
         Map<String,String> H = new HashMap<>();
-        System.out.println(gw.request("admin","1234","/banco/otp","",H));
-        String otp = gw.otps.get("admin"); // simulamos "leer" el OTP
-        H.put("X-OTP", otp);
-        System.out.println(gw.request("admin","1234","/banco/transferir","Cuenta 123456",H));
+        String usuario = "admin";
+        String password = "1234";
+
+        for(int i = 1; i <= 10; i++){
+            // Generar OTP (simula pedir OTP)
+            String otpResponse = gw.request(usuario, password, "/banco/otp", "", H);
+            System.out.println("Iteración " + i + " - " + otpResponse);
+
+            // "Leer" el OTP (simulación de recibirlo por SMS/email)
+            String otp = gw.otps.get(usuario);
+            // Preparar header con OTP
+            H.put("X-OTP", otp);
+
+            // Cuenta destino distinta por iteración
+            String cuentaDestino = "Cuenta 123456-" + String.format("%02d", i);
+
+            // Realizar transferencia
+            String transferResponse = gw.request(usuario, password, "/banco/transferir", cuentaDestino, H);
+            System.out.println(transferResponse);
+
+            // Limpiar header para la próxima iteración (opcional)
+            H.remove("X-OTP");
+        }
+
+        // Mostrar auditoría al final
+        System.out.println("\n--- Auditoría de transacciones ---");
+        for(String entry : gw.audit){
+            System.out.println(entry);
+        }
     }
 }
 // EOF
