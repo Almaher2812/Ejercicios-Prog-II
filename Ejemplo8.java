@@ -1,22 +1,16 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
 import java.util.*;
 
-/**
- * GIMNASIO: RBAC (admin crea clases; user se inscribe) + cupos por clase.
- * Login: admin/1234, user/abcd
- *
- * Demuestra:
- * - Control de acceso por rol (derivado del usuario)
- * - Manejo de cupos por recurso
- */
+// ==================== Servicios base ====================
 interface Service8 { String handle(String data, String user); }
 
-/** Login simple */
 class LoginService8 {
     private final Map<String,String> users = Map.of("admin","1234","user","abcd");
     boolean login(String u,String p){ return users.containsKey(u)&&users.get(u).equals(p); }
 }
 
-/** Gateway con cupos y verificación de rol */
 class ApiGateway8 {
     private final LoginService8 login;
     private final Map<String,Service8> routes = new HashMap<>();
@@ -33,32 +27,141 @@ class ApiGateway8 {
     }
 }
 
-public class Ejemplo8Gimnasio {
-    public static void main(String[] args){
-        LoginService8 ls = new LoginService8();
-        ApiGateway8 gw = new ApiGateway8(ls);
+// ==================== IU con Swing ====================
+public class Ejemplo8 extends JFrame {
+    private JTextField userField;
+    private JPasswordField passField;
+    private JButton loginButton;
+    private JTextArea outputArea;
 
-        // Crear clase (solo admin) -> data: "Clase:cupos"
-        gw.register("/gym/create",(data,user)->{
+    private LoginService8 loginService;
+    private ApiGateway8 gateway;
+    private String loggedUser;
+    private String loggedPass;
+
+    public Ejemplo8() {
+        super("🏋️ Gimnasio RBAC - Login & Menú");
+
+        loginService = new LoginService8();
+        gateway = new ApiGateway8(loginService);
+
+        // Registro de rutas
+        gateway.register("/gym/create",(data,user)->{
             if(!"admin".equals(user)) return "🚫 Solo admin puede crear clases.";
             String[] p = data.split(":");
-            gw.cupos.put(p[0], Integer.parseInt(p[1]));
+            gateway.cupos.put(p[0], Integer.parseInt(p[1]));
             return "✅ Clase creada: " + p[0] + " (" + p[1] + " cupos)";
         });
-
-        // Inscribirse a clase -> decrementa cupo
-        gw.register("/gym/inscribir",(data,user)->{
-            int c = gw.cupos.getOrDefault(data,0);
-            if(c<=0) return "Sin cupos en " + data;
-            gw.cupos.put(data,c-1);
+        gateway.register("/gym/inscribir",(data,user)->{
+            int c = gateway.cupos.getOrDefault(data,0);
+            if(c<=0) return "❌ Sin cupos en " + data;
+            gateway.cupos.put(data,c-1);
             return "🎫 " + user + " inscrito en " + data + " | Quedan: " + (c-1);
         });
 
-        // Flujo de prueba
-        System.out.println(gw.request("admin","1234","/gym/create","Crossfit:2"));
-        System.out.println(gw.request("user","abcd","/gym/inscribir","Crossfit"));
-        System.out.println(gw.request("user","abcd","/gym/inscribir","Crossfit"));
-        System.out.println(gw.request("user","abcd","/gym/inscribir","Crossfit")); // sin cupo
+        // Panel Login
+        JPanel loginPanel = new JPanel(new GridLayout(3,2));
+        loginPanel.add(new JLabel("Usuario:"));
+        userField = new JTextField();
+        loginPanel.add(userField);
+        loginPanel.add(new JLabel("Contraseña:"));
+        passField = new JPasswordField();
+        loginPanel.add(passField);
+        loginButton = new JButton("Login");
+        loginPanel.add(loginButton);
+
+        // Output
+        outputArea = new JTextArea(15,40);
+        outputArea.setEditable(false);
+
+        // Eventos
+        loginButton.addActionListener(e->login());
+
+        setLayout(new BorderLayout());
+        add(loginPanel, BorderLayout.NORTH);
+        add(new JScrollPane(outputArea), BorderLayout.CENTER);
+
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        pack();
+        setLocationRelativeTo(null);
+    }
+
+    private void login() {
+        String user = userField.getText().trim();
+        String pass = new String(passField.getPassword());
+        if(loginService.login(user,pass)) {
+            loggedUser=user;
+            loggedPass=pass;
+            outputArea.setText("✅ Bienvenido " + user + "\n");
+            showMenu();
+        } else {
+            JOptionPane.showMessageDialog(this,"❌ Usuario o contraseña inválidos.");
+        }
+    }
+
+    private void showMenu() {
+        String[] opciones = {
+                "A) Crear clase",
+                "B) Inscribirse en clase",
+                "C) Ver cupos disponibles",
+                "D) Ver clases creadas",
+                "E) Crear clase (extra 1)",
+                "F) Crear clase (extra 2)",
+                "G) Inscribirse en otra clase",
+                "H) Consultar estado usuario",
+                "I) Ver historial de inscripciones",
+                "J) Salir"
+        };
+
+        String seleccion = (String) JOptionPane.showInputDialog(
+                this,
+                "Seleccione una opción:",
+                "Menú Gimnasio",
+                JOptionPane.PLAIN_MESSAGE,
+                null,
+                opciones,
+                opciones[0]
+        );
+
+        if(seleccion!=null) handleSelection(seleccion.charAt(0));
+    }
+
+    private void handleSelection(char opcion) {
+        String resultado = "";
+        switch(opcion) {
+            case 'A':
+                if("admin".equals(loggedUser)) {
+                    String clase = JOptionPane.showInputDialog("Ingrese clase y cupos (ej: Crossfit:3)");
+                    resultado = gateway.request(loggedUser,loggedPass,"/gym/create",clase);
+                } else resultado="🚫 Solo admin puede crear clases.";
+                break;
+            case 'B':
+                String clase = JOptionPane.showInputDialog("Ingrese nombre de la clase:");
+                resultado = gateway.request(loggedUser,loggedPass,"/gym/inscribir",clase);
+                break;
+            case 'C':
+                resultado="📋 Cupos:\n";
+                for(var e: gateway.cupos.entrySet())
+                    resultado += e.getKey()+" → "+e.getValue()+"\n";
+                break;
+            case 'D':
+                resultado="📌 Clases creadas:\n";
+                for(String c: gateway.cupos.keySet()) resultado+=c+"\n";
+                break;
+            case 'J':
+                resultado="👋 Saliendo del sistema.";
+                JOptionPane.showMessageDialog(this,"Hasta pronto "+loggedUser+"!");
+                System.exit(0);
+                break;
+            default:
+                resultado="⚠️ Opción aún no implementada.";
+        }
+
+        outputArea.append(resultado+"\n");
+        showMenu(); // vuelve al menú
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(()-> new Ejemplo8().setVisible(true));
     }
 }
-// EOF
